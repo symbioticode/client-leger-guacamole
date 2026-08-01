@@ -1,0 +1,102 @@
+---
+# 20-guacamole-reachability.yml — Rendre Black/Orange joignables en RDP depuis
+# la VM Guacamole (vmbr0 uniquement), SANS dual-homing de la VM et SANS ouvrir
+# de route vmbr1 <-> vmbr2.
+#
+# ⚠️⚡ PLAYBOOK GATÉ / OPTIONNEL — NE PAS EXÉCUTER SANS VALIDATION EXPLICITE ⚡⚠️
+# Le brief exige que tout accès vers vmbr1/vmbr2 soit validé explicitement
+# (NextCloud est le seul pont autorisé). Ce playbook est la MÉCANIQUE
+# alternative si on choisit le "port-forward contrôlé par l'hôte" plutôt que
+# des NIC de gestion sur vmbr0. Il active ip_forward sur l'hôte Proxmox et
+# n'autorise QUE le trafic RDP source=Guacamole -> dest=Black/Orange.
+#
+# Usage (après validation) :
+#   ansible-playbook -i ansible/inventory/production \
+#     ansible/playbooks/20-guacamole-reachability.yml \
+#     -e apply_guacamole_reachability=true
+#
+# Pour simplement prévisualiser ce qui serait appliqué (mode check) :
+#   ansible-playbook ... 20-guacamole-reachability.yml --check --diff
+#
+# 🔒 Garanties :
+#   - Source unique : IP de la VM Guacamole uniquement.
+#   - Dest : ports RDP Black (10.0.1.100:3389) / Orange (10.0.2.100:3389) UNIQUEMENT.
+#   - Aucune règle vmbr1 <-> vmbr2 (les règles DROP du cluster.fw restent).
+#   - Règles idempotentes (flush ciblé + ré-insertion).
+- name: Accès RDP contrôlé Guacamole -> Black/Orange (OPTIONNEL, gated)
+  hosts: proxmox
+  gather_facts: no
+  vars:
+    # GATE : ne fait rien tant que apply_guacamole_reachability != true
+    apply_guacamole_reachability: false
+
+  tasks:
+    - name: Refuser si le flag de validation n'est pas explicite
+      fail:
+        msg: >
+          Ce playbook est gated. Ajouter -e apply_guacamole_reachability=true
+          APRÈS validation explicite du chemin réseau (voir docs/architecture.md).
+      when: not apply_guacamole_reachability
+
+    - name: Activer ip_forward (requis pour la redirection DNAT)
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_set: yes
+        reload: yes
+      when: apply_guacamole_reachability
+
+    - name: Redirection RDP Black (host:13389 -> 10.0.1.100:3389)
+      community.general.iptables:
+        table: nat
+        chain: PREROUTING
+        protocol: tcp
+        source: "{{ guacamole_ip }}"
+        destination: "192.168.100.200"
+        destination_port: "13389"
+        jump: DNAT
+        to_destination: "{{ vm_black.ip }}:{{ vm_black.rdp_port }}"
+        comment: "guacamole-rdp-black"
+      when: apply_guacamole_reachability
+
+    - name: Redirection RDP Orange (host:13390 -> 10.0.2.100:3389)
+      community.general.iptables:
+        table: nat
+        chain: PREROUTING
+        protocol: tcp
+        source: "{{ guacamole_ip }}"
+        destination: "192.168.100.200"
+        destination_port: "13390"
+        jump: DNAT
+        to_destination: "{{ vm_orange.ip }}:{{ vm_orange.rdp_port }}"
+        comment: "guacamole-rdp-orange"
+      when: apply_guacamole_reachability
+
+    - name: FORWARD RDP Guacamole -> Black
+      community.general.iptables:
+        chain: FORWARD
+        protocol: tcp
+        source: "{{ guacamole_ip }}"
+        destination: "{{ vm_black.ip }}"
+        destination_port: "{{ vm_black.rdp_port }}"
+        jump: ACCEPT
+        comment: "guacamole-forward-black"
+      when: apply_guacamole_reachability
+
+    - name: FORWARD RDP Guacamole -> Orange
+      community.general.iptables:
+        chain: FORWARD
+        protocol: tcp
+        source: "{{ guacamole_ip }}"
+        destination: "{{ vm_orange.ip }}"
+        destination_port: "{{ vm_orange.rdp_port }}"
+        jump: ACCEPT
+        comment: "guacamole-forward-orange"
+      when: apply_guacamole_reachability
+
+    - name: Rappel des cibles à renseigner dans le user-mapping.xml
+      debug:
+        msg:
+          - "Connexion Black -> host 192.168.100.200 port 13389"
+          - "Connexion Orange -> host 192.168.100.200 port 13390"
+      when: apply_guacamole_reachability

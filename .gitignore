@@ -1,0 +1,16 @@
+# Nix / build
+/result
+/result-*
+.direnv/
+.envrc
+
+# Secrets : le PLAINTEXT ne doit jamais être versionné.
+# Les fichiers chiffrés (*.age) SONT commitables (voir client-leger-nixos).
+secrets/*
+!secrets/*.age
+!secrets/*.example
+!secrets/README.md
+
+# Éditeurs / OS
+*.swp
+.DS_Store

@@ -1,0 +1,10 @@
+keys:
+  # Clé age du parc client-leger (même identité que client-leger-nixos).
+  # La clé privée correspondante vit sur la machine de contrôle
+  # (~/.config/sops/age/keys.txt) et sur la VM cible (/etc/sops-nix/keys.txt).
+  - &client age1gvv0udx9g0uv8t79swgwcphadqg89l4yd2y6046vhskr6m552q4q33aate
+creation_rules:
+  - path_regex: secrets/.*\.age$
+    key_groups:
+      - age:
+          - *client

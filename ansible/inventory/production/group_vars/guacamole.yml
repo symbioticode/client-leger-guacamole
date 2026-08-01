@@ -1,0 +1,15 @@
+---
+# Variables Guacamole — réseau et cibles RDP.
+# Les IPs Black/Orange ci-dessous sont celles de l'inventaire client-leger-nixos
+# (10.0.1.100 / 10.0.2.100). Elles doivent correspondre aux `hostname` du
+# user-mapping.xml réel (dépend de la config finale des VMs Windows : NIC de
+# gestion sur vmbr0, ou redirection hôte via 20-guacamole-reachability.yml).
+guacamole_ip: 192.168.100.210
+
+vm_black:
+  ip: 10.0.1.100
+  rdp_port: 3389
+
+vm_orange:
+  ip: 10.0.2.100
+  rdp_port: 3389
