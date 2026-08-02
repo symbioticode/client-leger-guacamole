@@ -12,7 +12,9 @@
 #   bash proxmox-create-guacamole-vm.sh [--dry-run] [--vmid 133]
 #
 # Variables surchargeables :
-#   VMID HOSTNAME MEMORY CORES DISK_SIZE ISO_NAME STORAGE BRIDGE
+#   VMID VM_HOSTNAME MEMORY CORES DISK_SIZE ISO_NAME STORAGE BRIDGE
+# NB : on utilise VM_HOSTNAME (pas HOSTNAME) car HOSTNAME est un builtin
+# bash toujours défini (l'hôte local) — il écraserait la valeur voulue.
 # =============================================================================
 
 set -euo pipefail
@@ -42,7 +44,7 @@ run() {
 
 # ── Configuration (surchargeable) ────────────────────────────────────────────
 VMID="${VMID:-133}"
-HOSTNAME="${HOSTNAME:-guacamole}"
+VM_HOSTNAME="${VM_HOSTNAME:-guacamole}"
 MEMORY="${MEMORY:-4096}"
 CORES="${CORES:-2}"
 ISO_STORAGE="${ISO_STORAGE:-local}"
@@ -53,7 +55,7 @@ BRIDGE="${BRIDGE:-vmbr0}"
 STATIC_IP="${STATIC_IP:-192.168.100.210}"
 
 sep
-echo -e "${BOLD}Création VM ${VMID} (${HOSTNAME}) — Guacamole / NixOS / ${BRIDGE}${NC}"
+echo -e "${BOLD}Création VM ${VMID} (${VM_HOSTNAME}) — Guacamole / NixOS / ${BRIDGE}${NC}"
 sep
 
 # ── Vérifications ─────────────────────────────────────────────────────────────
@@ -79,7 +81,7 @@ ok "Bridge  : ${BRIDGE} (SEUL NIC — pas de dual-homing vmbr1/vmbr2)"
 # ── Création VM ───────────────────────────────────────────────────────────────
 sep; info "Création de la VM..."
 run "qm create $VMID \
-  --name '$HOSTNAME' \
+  --name '$VM_HOSTNAME' \
   --memory $MEMORY \
   --cores $CORES \
   --cpu host \
@@ -113,7 +115,7 @@ ok "Console : serial0 (qm terminal)"
 run "qm set $VMID --agent enabled=1,fstrim_cloned_disks=1"
 ok "QEMU agent activé"
 
-run "qm set $VMID --description 'VM Guacamole — ${HOSTNAME}
+run "qm set $VMID --description 'VM Guacamole — ${VM_HOSTNAME}
 OS: NixOS 26.05
 Role: Couche d acces web (guacd + Tomcat + nginx HTTPS)
 Reseau: ${BRIDGE} uniquement, IP statique ${STATIC_IP} (LAN 192.168.100.0/24)
@@ -129,7 +131,7 @@ ok "VM démarrée"
 
 # ── Résumé ────────────────────────────────────────────────────────────────────
 sep
-echo -e "${BOLD}${GREEN}VM $HOSTNAME (VMID $VMID) créée et démarrée.${NC}"
+echo -e "${BOLD}${GREEN}VM $VM_HOSTNAME (VMID $VMID) créée et démarrée.${NC}"
 echo ""
 echo -e "  RAM: ${MEMORY}MB | CPU: ${CORES} cores | Disque: ${DISK_SIZE}GB | BIOS: OVMF"
 echo -e "  Réseau: ${BRIDGE} (unique) — IP finale prévue: ${STATIC_IP}"
@@ -143,8 +145,9 @@ echo -e "   ${CYAN}  ~/.ssh/deploy_guacamole /var/lib/vz/template/iso/guacamole-
 echo -e "   ${CYAN}qm set $VMID --ide3 local:iso/guacamole-seed.iso,media=cdrom${NC}"
 echo ""
 echo -e "${BOLD}3. Dans l'installeur NixOS — lancer l'installation :${NC}"
-echo -e "   ${CYAN}mount /dev/sr1 /mnt || mount -L GUACAMOLE_SEED /mnt${NC}"
-echo -e "   ${CYAN}bash /mnt/guacamole-live-install.sh${NC}"
+echo -e "   ${CYAN}sudo mkdir -p /seed${NC}"
+echo -e "   ${CYAN}sudo mount /dev/sr1 /seed || sudo mount -L GUACAMOLE_SEED /seed${NC}"
+echo -e "   ${CYAN}sudo bash /seed/guacamole-live-install.sh${NC}"
 echo ""
 echo -e "${BOLD}4. Après nixos-install — depuis le PVE :${NC}"
 echo -e "   ${YELLOW}bash scripts/guacamole-finalize.sh $VMID${NC}"

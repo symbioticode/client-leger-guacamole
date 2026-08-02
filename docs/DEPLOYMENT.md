@@ -43,15 +43,20 @@ qm set 133 --ide3 local:iso/guacamole-seed.iso,media=cdrom
 Puis dans l'installeur NixOS (`qm terminal 133`, quitter : Ctrl+O) :
 
 ```bash
-mount /dev/sr1 /mnt || mount -L GUACAMOLE_SEED /mnt
-bash /mnt/guacamole-live-install.sh
+sudo mkdir -p /seed
+sudo mount /dev/sr1 /seed || sudo mount -L GUACAMOLE_SEED /seed
+sudo bash /seed/guacamole-live-install.sh
 # À la fin : poweroff
 ```
 
-> Le seed contient la déploy key + l'URL git ; le script clone le repo **dans**
-> l'installeur puis partitionne `/dev/sda`, régénère le `hardware-configuration.nix`
-> réel dans le flake, et lance `nixos-install --flake .#guacamole`.
-> Alternative sans seed : `bash /mnt/guacamole-live-install.sh <chemin-local|url-git>`.
+> L'installeur auto-login l'utilisateur `nixos` (sudo sans mot de passe).
+> Le seed contient la déploy key + l'URL git + la clé age sops ; le script
+> clone le repo **dans** l'installeur puis partitionne `/dev/sda`, régénère le
+> `hardware-configuration.nix` réel dans le flake, pose la clé age dans la
+> cible (`/etc/sops-nix/keys.txt`) et lance
+> `nixos-install --flake .#guacamole`.
+> Ne pas monter le seed sur `/mnt` (cible installée par le script).
+> Alternative sans seed : `sudo bash /seed/guacamole-live-install.sh <chemin-local|url-git>`.
 
 ## 3. Finaliser sur Proxmox
 

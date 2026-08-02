@@ -4,11 +4,17 @@
 # Tourne DANS l'installeur NixOS (VMID 133, une seule session).
 #
 # Deux sources possibles pour le repo :
-#   A) Seed ISO (recommandé) :  mount /dev/sr1 /mnt || mount -L GUACAMOLE_SEED /mnt
-#                               bash /mnt/guacamole-live-install.sh
-#      -> le seed contient la déploy key + l'URL git (guacamole-make-seed-iso.sh)
-#   B) Passer un repo directement :  bash .../guacamole-live-install.sh <chemin|url>
+#   A) Seed ISO (recommandé) :  sudo mkdir -p /seed
+#                               sudo mount /dev/sr1 /seed || sudo mount -L GUACAMOLE_SEED /seed
+#                               sudo bash /seed/guacamole-live-install.sh
+#      -> le seed contient la déploy key + l'URL git (+ clé age optionnelle)
+#         (guacamole-make-seed-iso.sh). NB : ne PAS monter le seed sur /mnt
+#         (/mnt = disque cible installé par ce script).
+#   B) Passer un repo directement :  sudo bash .../guacamole-live-install.sh <chemin|url>
 #      (chemin local ou URL git ; GIT_SSH_COMMAND à positionner si clé SSH)
+#
+# NB : l'installeur NixOS auto-login l'utilisateur `nixos` (sudo sans mot de
+# passe) ; lancer ce script avec `sudo` (root requis : mkfs/mount/nixos-install).
 #
 # Étapes :
 #   1. Récupère le repo (clone via seed/deploy key, ou chemin/URL passé)
@@ -76,6 +82,19 @@ mount "${DISK}2" /mnt
 mkdir -p /mnt/boot
 mount "${DISK}1" /mnt/boot
 ok "Disque partitionné et monté"
+
+# ---- 1b. Clé age sops-nix dans la cible ---------------------------------------
+# Requis pour que sops-install-secrets déchiffre user-mapping.xml dès le
+# premier boot de la VM (avant tout scp/nixos-rebuild).
+if [[ -f "${SEED_DIR}/age_key" ]]; then
+  mkdir -p /mnt/etc/sops-nix
+  cp "${SEED_DIR}/age_key" /mnt/etc/sops-nix/keys.txt
+  chmod 600 /mnt/etc/sops-nix/keys.txt
+  ok "clé age sops-nix posée dans la cible (/etc/sops-nix/keys.txt)"
+else
+  warn "AUCUNE clé age dans le seed — sops échouera au premier boot."
+  warn "Corriger après finalize : scp clé puis re-activer sops."
+fi
 
 # ---- 2. Config matérielle réelle ---------------------------------------------
 nixos-generate-config --root /mnt

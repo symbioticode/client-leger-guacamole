@@ -7,6 +7,14 @@
 
   networking.hostName = "guacamole";
 
+  # Bootloader EFI (OVMF) — placé ici car hardware-configuration.nix est
+  # régénéré par nixos-generate-config à l'install (sans boot.loader.*).
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+
+  # Agent QEMU requis par scripts/guacamole-finalize.sh (détection IP).
+  services.qemuGuest.enable = true;
+
   system.stateVersion = "26.05";
 
   time.timeZone = "America/Montreal";
