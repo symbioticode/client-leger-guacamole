@@ -14,15 +14,19 @@
   i18n.supportedLocales = [ "fr_CA.UTF-8/UTF-8" "en_US.UTF-8/UTF-8" ];
 
   # Utilisateur d'administration (SSH par clé).
-  # ⚠️ Remplacer la clé PLACEHOLDER par la vraie clé publique AVANT tout
-  # déploiement (voir docs/DEPLOYMENT.md).
   users.users.admin = {
     isNormalUser = true;
     extraGroups = [ "wheel" "tomcat" ];
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA PLACEHOLDER_ADMIN_KEY"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAtNpKi466VEaTrFe3PGYChz1xO9Q8fBPKI90DptDPnp guacamole-vm133"
     ];
   };
+
+  # Clé root : déploiement `nixos-rebuild --target-host root@guacamole`
+  # (just deploy) — PermitRootLogin=prohibit-password (hardening.nix).
+  users.users.root.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAtNpKi466VEaTrFe3PGYChz1xO9Q8fBPKI90DptDPnp guacamole-vm133"
+  ];
 
   security.sudo.extraRules = [
     {

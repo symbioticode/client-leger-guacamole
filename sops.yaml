@@ -4,7 +4,10 @@ keys:
   # (~/.config/sops/age/keys.txt) et sur la VM cible (/etc/sops-nix/keys.txt).
   - &client age1gvv0udx9g0uv8t79swgwcphadqg89l4yd2y6046vhskr6m552q4q33aate
 creation_rules:
-  - path_regex: secrets/.*\.age$
+  # Tous les fichiers de secrets/ (plaintext .xml pendant le chiffrage en
+  # place, puis .age au commit). La sortie .age reste seule commitable
+  # (.gitignore).
+  - path_regex: secrets/.*$
     key_groups:
       - age:
           - *client
