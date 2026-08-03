@@ -3,8 +3,8 @@
 
 let
   # Le fichier chiffré est créé par :
-  #   sops secrets/user-mapping.xml   (après édition de secrets/user-mapping.xml.example)
-  hasUserMapping = builtins.pathExists ../../secrets/user-mapping.xml.age;
+  #   sops -e --input-type json --output-type json secrets/user-mapping.json > secrets/user-mapping.json.age
+  hasUserMapping = builtins.pathExists ../../secrets/user-mapping.json.age;
 in
 {
   sops.age.keyFile = "/etc/sops-nix/keys.txt";
@@ -16,7 +16,7 @@ in
   # fichier n'existe qu'à l'exécution, après déchiffrement par sops-nix.
   sops.secrets = lib.mkIf hasUserMapping {
     "user-mapping.xml" = {
-      sopsFile = ../../secrets/user-mapping.xml.age;
+      sopsFile = ../../secrets/user-mapping.json.age;
       owner = "tomcat";
       group = "tomcat";
       mode = "0400";

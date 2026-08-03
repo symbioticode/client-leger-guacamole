@@ -25,11 +25,14 @@ seed-iso GIT_URL='git@github.com:symbioticode/client-leger-guacamole.git' DEPLOY
     bash scripts/guacamole-make-seed-iso.sh {{GIT_URL}} {{DEPLOY_KEY}} {{OUTPUT_ISO}}
 
 # --- Secrets ---
+# Édite secrets/user-mapping.json (plaintext, gitignoré) puis chiffre vers
+# secrets/user-mapping.json.age (commitable). Le .age sert de secret sops
+# nommé "user-mapping.xml" (format JSON imposé : l'extension .xml génère un
+# blob `data` que sops-install-secrets ne sait pas lire).
 encrypt-user-mapping:
-    cp secrets/user-mapping.xml.example secrets/user-mapping.xml
-    ${EDITOR:-vi} secrets/user-mapping.xml
-    sops -e -i secrets/user-mapping.xml
-    mv secrets/user-mapping.xml secrets/user-mapping.xml.age
+    cp -f secrets/user-mapping.json.example secrets/user-mapping.json
+    ${EDITOR:-vi} secrets/user-mapping.json
+    sops -e --input-type json --output-type json secrets/user-mapping.json > secrets/user-mapping.json.age
 
 # --- Tests (ne touche pas à l'infra existante) ---
 # Léger : vérifie la config repo localement.

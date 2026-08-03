@@ -1,10 +1,11 @@
 # Configuration hôte — VM Guacamole (proxmox, VMID 133, vmbr0 uniquement).
+#
+# NB : le hardware-configuration.nix est ajouté PAR LE CONSOMMATEUR
+# (flake.nix : config de déploiement « guacamole »), pas ici — sinon l'image
+# qemu-efi hériterait des placeholders de fileSystems. Les deux configs
+# (deploy + image) partagent ce même fichier.
 { config, pkgs, lib, ... }:
 {
-  imports = [
-    ./hardware-configuration.nix
-  ];
-
   networking.hostName = "guacamole";
 
   # Bootloader EFI (OVMF) — placé ici car hardware-configuration.nix est
