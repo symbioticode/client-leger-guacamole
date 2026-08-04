@@ -83,6 +83,18 @@ partitionnement /dev/sda ✅ → clé age posée /etc/sops-nix/keys.txt ✅
 - La gen installée reste a priori saine (le switch échoué avait `NIXOS_INSTALL_BOOTLOADER=0`,
   le bootloader n'a pas été réécrit) — à confirmer au prochain boot nominal.
 
+### ✅ Le fix racine du switch est committé
+- `nixos/hosts/guacamole/hardware-configuration.nix` : **UUIDs réels** de la VM 134
+  (root `08177c6c-c13b-485e-976d-3b7583b77cb7`, `/boot` `CFCE-DC11`) à la place du
+  placeholder `REPLACE_ME_*` → `just deploy` ne réévalue plus de `fileSystems` bidon
+  (fin du crash `boot.mount`). Flake évalue OK. Commit poussé.
+
+### ⚠️ Fin de session : réinstallation rejouée mais interrompue avant le bootloader
+- Disque 134 re-partitionné + closure partiellement construit (`.drv` du système présent,
+  pas le closure complet) ; **pas de bootloader** sur l'ESP (`/m/boot/loader/entries` absent).
+- Pour reprendre : re-lancer `bash /seed/guacamole-live-install.sh` (≈40 min, closure à re-faire)
+  puis finalize. La route est prouvée (2× installées avec succès) ; seul le bootloader reste à poser.
+
 ### ⚙️ GitHub / repo : à jour
 Commits poussés : `a496f40` (addSSL + console + mdp 1er boot + clé age obligatoire seed) ;
 `09bf274` (nginx clé lisible). `flake check` : toujours rouge grondé par la config
