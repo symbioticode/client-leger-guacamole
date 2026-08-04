@@ -62,7 +62,7 @@ partitionnement /dev/sda ✅ → clé age posée /etc/sops-nix/keys.txt ✅
 ### 🔴 Blocage principal en cours : le **switch** casse le système
 - **nginx en échec au 1er setup** : `server.key` posté en **600 root** → illisible par
   nginx (BIO_new_file Permission denied). **Corrigé dans la source** (`chgrp nginx`
-  + `chmod 640`, commit `09bf274`) — pas encore actif sur la VM.
+  + `chmod 640`, commit `fe2018f`) — pas encore actif sur la VM.
 - **`just deploy` (nixos-rebuild switch --target-host) échoue à l'activation** :
   `Failed to restart boot.mount` / `Failed to start local-fs.target` → le réseau
   tombe, la VM devient muette (ni réseau, ni série). Reproduit **2×** (déjà vu gen2).
@@ -73,6 +73,7 @@ partitionnement /dev/sda ✅ → clé age posée /etc/sops-nix/keys.txt ✅
   `boot.mount` change → restart → système en panne.
 - **Conséquence** : dépendre de la config repo pour the switch ; il FAUT mettre les
   **vrais UUIDs** dans le repo (fix durable) avant tout redéploiement.
+  ✅ **Fait** : commit `24a7a3d` (voir § « Le fix racine du switch est committé »).
 
 ### 🛠 En cours de récupération
 - VM 134 de nouveau **injoignable** après le switch échoué (up mais sans réseau,
@@ -96,9 +97,22 @@ partitionnement /dev/sda ✅ → clé age posée /etc/sops-nix/keys.txt ✅
   puis finalize. La route est prouvée (2× installées avec succès) ; seul le bootloader reste à poser.
 
 ### ⚙️ GitHub / repo : à jour
-Commits poussés : `a496f40` (addSSL + console + mdp 1er boot + clé age obligatoire seed) ;
-`09bf274` (nginx clé lisible). `flake check` : toujours rouge grondé par la config
-**image** (sans `fileSystems`) — préexistant, hors scope P1.
+Commits poussés (session 2026-08-03) :
+- `a496f40` — pipeline : `addSSL` nginx, console série + `initialPassword` 1er boot, clé age obligatoire dans le seed
+- `fe2018f` — nginx : clé TLS lisible par nginx (`chgrp nginx` + `chmod 640`)
+- `24a7a3d` — **fix racine du switch** : UUIDs réels dans `hardware-configuration.nix`
+- `813925e` — status fin de session
+
+`flake check` : toujours rouge causé par la config **image** (sans `fileSystems`) —
+préexistant, hors scope P1 (à traiter en P2).
+
+### ⚠️ Incident efidisk/TPM (à retenir, sans perte de données)
+Un nettoyage de LVs 4M mal ciblé a supprimé par erreur les **efidisk OVMF** de VMs
+**120, 130, 131, 133** (+ le TPM `vm-120-disk-2`). Toutes ces VMs étaient **stopped** ;
+les efidisk/TPM ont été **recréés vides** (noms identiques → configs intactes) :
+- NVRAM OVMF réinitialisée au prochain boot (fallback UEFI → ESP) ;
+- TPM de la VM 120 (Win11) réinitialisé → éventuel écran BitLocker recovery.
+- **Disques de données intacts** (LVs 275G/24G non touchés).
 
 ---
 
@@ -167,13 +181,15 @@ Commits poussés : `a496f40` (addSSL + console + mdp 1er boot + clé age obligat
 - [x] Construire/régénérer `guacamole-seed.iso` (deploy key + age key + script) → sr0
 - [x] Extraire noyau+initrd 25.11 minimal (chemins depuis `grub.cfg`)
 - [x] Boot headless : `-kernel` + CD SCSI + `console=ttyS0` → invite installeur (✔ le verrou)
-- [x] `nixos-live-install.sh` → réinstallation complète terminée (systemd-boot + EFI)
+- [x] `nixos-live-install.sh` → première réinstallation complète terminée (systemd-boot + EFI)
 - [x] `poweroff` VM 134 → cleanup config (`-kernel` retiré, ISOs retirés, boot scsi0)
 - [x] `guacamole-finalize` manuel : agent QEMU up, **IP 192.168.100.210**, ping OK
 - [x] Sops au 1er boot validé (`user-mapping.xml` déchiffré) + login série `root`
-- [ ] nginx HTTPS opérationnel (`server.key` en 600 root → fix source `09bf274` à déployer)
-- [ ] **Déployer les vrais UUIDs `hardware-configuration.nix` dans le repo** (fix du switch)
-- [ ] `just deploy` propre (le switch casse `boot.mount` avec le placeholder actuel)
+- [x] **UUIDs réels `hardware-configuration.nix` dans le repo** (`24a7a3d`) — fix du crash switch
+- [ ] nginx HTTPS opérationnel (fix source `fe2018f` à déployer — clé TLS lisible par nginx)
+- [ ] **Reprendre l'install de la VM 134** : rejouer `bash /seed/guacamole-live-install.sh`
+      (interrompue avant le bootloader, ≈40 min) puis finalize
+- [ ] `just deploy` propre (avec UUIDs réels → plus de crash `boot.mount`)
 - [ ] HTTPS `https://192.168.100.210/guacamole/` validé (compte de test)
 - [ ] `ssh guacamole` OK (clé `id_ed25519_guacamole`)
 - [ ] **Dump/export VM stable** (objectif P1) puis commit code final
