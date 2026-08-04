@@ -37,15 +37,56 @@ l'invite de l'installeur et l'installation est **en cours** sur la **VM 134**.
 - Console : `socat -u UNIX-CONNECT:/var/run/qemu-server/134.serial0 -`.
 - **Résultat** : multi-user + `serial-getty@ttyS0` auto-login `nixos` → invite `nixos@nixos:~$`.
 
-### État install (au point où on en est)
+### Réinstallation complète terminée ✅ (pipeline fixé joué de bout en bout)
+Le seed a été reconstruit via les **scripts corrigés** (`guacamole-make-seed-iso.sh`
+avec **clé age obligatoire**, point 4 MISSION) puis la VM 134 réinstallée depuis
+l'installeur avec le **flake GitHub à jour** :
 ```
-$ lsblk -o +LABEL          # sr0=GUACAMOLE_SEED, sr1=nixos-minimal-25.11…
-$ sudo mkdir -p /seed && sudo mount -L GUACAMOLE_SEED /seed
-$ sudo setsid bash /seed/guacamole-live-install.sh > /tmp/live-install.log 2>&1 < /dev/null &
-# tail /tmp/live-install.log → clone GitHub OK ✅ → partitionnement de /dev/sda en cours 🔄
+partitionnement /dev/sda ✅ → clé age posée /etc/sops-nix/keys.txt ✅
+→ hardware-configure généré ♻ → nixos-install --flake .#guacamole ✅
+→ systemd-boot + EFI entry → « installation finished! »
 ```
-→ suite : attendre `nixos-install --flake .#guacamole`, poweroff, puis
-`bash scripts/guacamole-finalize.sh 134`.
+
+---
+
+## 🔬 Session actuelle — validation / stabilisation (2026-08-03)
+
+### ✅ Les 2 fixes chocs de MISSION, validés sur la VM réinstallée
+- **Console série** (`kernelParams ttyS0` + `boot.loader.timeout`) : boot headless OK,
+  login série **root/changeme-firstboot** fonctionne (`initialPassword` validé).
+- **Sops au 1er boot** : clé age embarquée dans le seed → `/etc/sops-nix/keys.txt`
+  posé à l'install → `user-mapping.xml` **déchiffré** dans `/run/secrets/` ✅.
+- **Agent/network** : agent QEMU up, eth0 = **192.168.100.210**, ping OK.
+- Backend guacamole **up** : guacd (4822) + webapp Tomcat (8080) 🟢.
+
+### 🔴 Blocage principal en cours : le **switch** casse le système
+- **nginx en échec au 1er setup** : `server.key` posté en **600 root** → illisible par
+  nginx (BIO_new_file Permission denied). **Corrigé dans la source** (`chgrp nginx`
+  + `chmod 640`, commit `09bf274`) — pas encore actif sur la VM.
+- **`just deploy` (nixos-rebuild switch --target-host) échoue à l'activation** :
+  `Failed to restart boot.mount` / `Failed to start local-fs.target` → le réseau
+  tombe, la VM devient muette (ni réseau, ni série). Reproduit **2×** (déjà vu gen2).
+- **💡 Cause racine identifiée** : `nixos/hosts/guacamole/hardware-configuration.nix`
+  du repo est un **template placeholder** (`device = /dev/disk/by-uuid/REPLACE_ME_ROOT`)
+  — les vrais UUIDs générés par `nixos-generate-config` à l'install n'ont **jamais été
+  re-poussés**. Tout `nixos-rebuild` depuis le repo réévalue `fileSystems` bidon →
+  `boot.mount` change → restart → système en panne.
+- **Conséquence** : dépendre de la config repo pour the switch ; il FAUT mettre les
+  **vrais UUIDs** dans le repo (fix durable) avant tout redéploiement.
+
+### 🛠 En cours de récupération
+- VM 134 de nouveau **injoignable** après le switch échoué (up mais sans réseau,
+  serial vide) → reboot inutile (reste down).
+- Boot **installeur/redirection** (`-kernel` + `scsi2` minimal + `console=ttyS0`) relancé ;
+  `/dev/sda2` monté dans l'installeur pour extraire le **vrai**
+  `hardware-configuration.nix` → le déposer dans le repo (fix durable) → redeploy.
+- La gen installée reste a priori saine (le switch échoué avait `NIXOS_INSTALL_BOOTLOADER=0`,
+  le bootloader n'a pas été réécrit) — à confirmer au prochain boot nominal.
+
+### ⚙️ GitHub / repo : à jour
+Commits poussés : `a496f40` (addSSL + console + mdp 1er boot + clé age obligatoire seed) ;
+`09bf274` (nginx clé lisible). `flake check` : toujours rouge grondé par la config
+**image** (sans `fileSystems`) — préexistant, hors scope P1.
 
 ---
 
@@ -114,12 +155,17 @@ $ sudo setsid bash /seed/guacamole-live-install.sh > /tmp/live-install.log 2>&1 
 - [x] Construire/régénérer `guacamole-seed.iso` (deploy key + age key + script) → sr0
 - [x] Extraire noyau+initrd 25.11 minimal (chemins depuis `grub.cfg`)
 - [x] Boot headless : `-kernel` + CD SCSI + `console=ttyS0` → invite installeur (✔ le verrou)
-- [x] `nixos-live-install.sh` lancé détaché (log `/tmp/live-install.log`)
-- [ ] `nixos-install --flake .#guacamole` terminé (téléchargement closure en cours)
-- [ ] `poweroff` de la VM 134
-- [ ] `guacamole-finalize.sh 134` (boot scsi0, attente agent QEMU, IP 192.168.100.210)
+- [x] `nixos-live-install.sh` → réinstallation complète terminée (systemd-boot + EFI)
+- [x] `poweroff` VM 134 → cleanup config (`-kernel` retiré, ISOs retirés, boot scsi0)
+- [x] `guacamole-finalize` manuel : agent QEMU up, **IP 192.168.100.210**, ping OK
+- [x] Sops au 1er boot validé (`user-mapping.xml` déchiffré) + login série `root`
+- [ ] nginx HTTPS opérationnel (`server.key` en 600 root → fix source `09bf274` à déployer)
+- [ ] **Déployer les vrais UUIDs `hardware-configuration.nix` dans le repo** (fix du switch)
+- [ ] `just deploy` propre (le switch casse `boot.mount` avec le placeholder actuel)
 - [ ] HTTPS `https://192.168.100.210/guacamole/` validé (compte de test)
 - [ ] `ssh guacamole` OK (clé `id_ed25519_guacamole`)
+- [ ] **Dump/export VM stable** (objectif P1) puis commit code final
+- [ ] P2 : doc procédure complète + sortir l'image config du `flake check`
 - [ ] Ne **pas** exécuter `20-guacamole-reachability.yml` (Black/Orange instables)
 
 ### Rappel historique (VM 133 — voie image qcow2, abandonnée)
