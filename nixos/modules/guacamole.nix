@@ -79,6 +79,7 @@ in
           { addr = "0.0.0.0"; port = 80; }
           { addr = "0.0.0.0"; port = 443; ssl = true; }
         ];
+        addSSL = true;
         sslCertificate = "${tlsDir}/server.crt";
         sslCertificateKey = "${tlsDir}/server.key";
         locations."/" = {

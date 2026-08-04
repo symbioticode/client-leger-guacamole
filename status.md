@@ -1,7 +1,7 @@
 # status.md — Client Léger Guacamole
 
 > État réel du repo `client-leger-guacamole` (repo indépendant de `client-leger-nixos`,
-> même si les deux partagent l'infra Proxmox). Mis à jour le 2026-08-02.
+> même si les deux partagent l'infra Proxmox). Mis à jour le 2026-08-03.
 
 ## Infrastructure
 
@@ -12,6 +12,42 @@
 | Piste principale Black/Orange | repo `client-leger-nixos` (VMs 130/131) | ⚠️ en dépannage, **hors scope ici** |
 | Isolation | aucune route vmbr1 ↔ vmbr2 (règle fondatrice) | ✅ respectée |
 | Stockage PVE | `/` (pve-root) **100 % plein** ; VG `pve` thin-pool ~40 % (≈140 G libres) | ⚠️ `/` plein (état préexistant) |
+
+## 🚀 Progression 2026-08-03 : install VM 134 par console série (PIVOT)
+
+**Grosse avancée** : le boot headless de l'installeur NixOS est **résolu** — on atteint
+l'invite de l'installeur et l'installation est **en cours** sur la **VM 134**.
+
+### Le verrou débloqué (3 pièges)
+1. **CD IDE invisible en boot `-kernel`** : `ide2` ne produit aucun `/dev/sr*`
+   (stage-1 : `Can't lookup blockdev`, `root=LABEL` timeout). Même avec `ata_piix`
+   + `sr_mod` chargés, le contrôleur PIIX IDE n'énumère pas le CD dans ce mode.
+2. **Fix = CD-ROM SCSI** : attacher les ISO en `scsi2`/`scsi3` (virtio-scsi déjà
+   initialisé par `sda`) → `/dev/sr0`/`sr1` apparaissent, `root=LABEL` fonctionne.
+3. **ISO graphique = hang Plymouth** : boote jusqu'au stage-2 puis reste bloqué sur
+   *Tell Plymouth To Write Out Runtime Data* (pas de DRM en `vga serial0`, aucun getty
+   série). → **passer à l'ISO `minimal`** (pas de splash) + `plymouth.enable=0`.
+
+### Recette (détail complet : `docs/kb002-guacamole-vm134-serial-install.md`)
+- ISO **minimal 25.11** (1 654 456 320 o) sur `pve-templates` ; noyau+initrd extraits
+  vers `/var/lib/vz/template/iso/guacamole-kernel` + `guacamole-initrd` (chemins lus dans
+  `EFI/BOOT/grub.cfg`, entrée `console=ttyS0,115200n8`).
+- Boot via `-args -kernel … -append "… root=LABEL=nixos-minimal-25.11-x86_64
+  plymouth.enable=0 console=ttyS0,115200n8"` ; ISOs en `scsi2` (installeur) + `scsi3` (seed).
+- Console : `socat -u UNIX-CONNECT:/var/run/qemu-server/134.serial0 -`.
+- **Résultat** : multi-user + `serial-getty@ttyS0` auto-login `nixos` → invite `nixos@nixos:~$`.
+
+### État install (au point où on en est)
+```
+$ lsblk -o +LABEL          # sr0=GUACAMOLE_SEED, sr1=nixos-minimal-25.11…
+$ sudo mkdir -p /seed && sudo mount -L GUACAMOLE_SEED /seed
+$ sudo setsid bash /seed/guacamole-live-install.sh > /tmp/live-install.log 2>&1 < /dev/null &
+# tail /tmp/live-install.log → clone GitHub OK ✅ → partitionnement de /dev/sda en cours 🔄
+```
+→ suite : attendre `nixos-install --flake .#guacamole`, poweroff, puis
+`bash scripts/guacamole-finalize.sh 134`.
+
+---
 
 ## VM Guacamole (VMID 133)
 
@@ -72,28 +108,34 @@
 4. Puis : finalize (boot scsi, attente agent) → HTTPS `https://192.168.100.210/guacamole/`
    (`guacadmin`/`GuacamoleBootstrap2026!`) → `ssh guacamole` → `docs/kb001-guacamole.md`.
 
-## Todolist mission sprint 2 (`docs/prompts/sprint2-agent-bootstrap-vm133-guacamole.md`)
+## Todolist mission — VM 134 (voie série, session 2026-08-03)
 
-- [x] Clé admin dédiée générée et configurée (admin **et** root) — commit `e75e85d`
-- [x] Règle sops `secrets/.*$` (`sops.yaml`) — `e75e85d`
-- [x] Scripts `create-vm-real` / `make-seed-iso` / `live-install` / `finalize` — `e75e85d` + `01d45ab`
-- [x] Fix bootloader systemd-boot + agent QEMU dans `default.nix` — `01d45ab`
-- [x] VM 133 créée et démarrée ; seed ISO généré et attaché (ide3)
-- [x] Secret sops corrigé (`user-mapping.json.age`, roundtrip vérifié) — tentative image
-- [x] Build image disque `.#guacamole-qcow2-efi` réussi (qcow2 EFI 6,49 Go)
-- [ ] Install NixOS fonctionnelle — **échouée** : install installeur interrompue (04:00) **et** tentative image corrompue/gel (02/08 soir) → **à relancer** (voir § reprise)
-- [ ] `guacamole-finalize.sh 133` (boot scsi, attente agent)
-- [ ] HTTPS `https://192.168.100.210/guacamole/` validé avec le compte de test
+- [x] Télécharger ISO NixOS 25.11 (minimal + graphique) tailles complètes vérifiées
+- [x] Construire/régénérer `guacamole-seed.iso` (deploy key + age key + script) → sr0
+- [x] Extraire noyau+initrd 25.11 minimal (chemins depuis `grub.cfg`)
+- [x] Boot headless : `-kernel` + CD SCSI + `console=ttyS0` → invite installeur (✔ le verrou)
+- [x] `nixos-live-install.sh` lancé détaché (log `/tmp/live-install.log`)
+- [ ] `nixos-install --flake .#guacamole` terminé (téléchargement closure en cours)
+- [ ] `poweroff` de la VM 134
+- [ ] `guacamole-finalize.sh 134` (boot scsi0, attente agent QEMU, IP 192.168.100.210)
+- [ ] HTTPS `https://192.168.100.210/guacamole/` validé (compte de test)
 - [ ] `ssh guacamole` OK (clé `id_ed25519_guacamole`)
-- [ ] `docs/kb001-guacamole.md` créé
-- [ ] `status.md` créé
-- [ ] Ne **pas** exécuter `20-guacamole-reachability.yml` (hors scope tant que Black/Orange instables)
+- [ ] Ne **pas** exécuter `20-guacamole-reachability.yml` (Black/Orange instables)
+
+### Rappel historique (VM 133 — voie image qcow2, abandonnée)
+- [x] Clé admin dédiée / règle sops / scripts `create-vm`*`make-seed`*`live-install`*`finalize`
+- [x] Fix bootloader systemd-boot + agent QEMU dans `default.nix` — `01d45ab`
+- [x] Secret sops corrigé (`user-mapping.json.age`, roundtrip vérifié)
+- [x] Build image qcow2 EFI réussi (mais image corrompue/gel à l'import PVE → abandonnée)
 
 ## Notes
 
 - Aucun secret en clair dans le repo (test `just test` = `tests/test-guacamole-config.sh` vert).
-- L'installation reste le seul blocage. Deux pistes ont échoué : (a) `nixos-install` dans
-  l'installeur (lent, interrompu) ; (b) image `qemu-efi` (corruption pendant l'import/resize).
-  Le secret sops et le build d'image sont **valides** et réutilisables. La reprise doit
-  éviter tout resize manuel et ajouter `console=ttyS0` pour observer le boot.
-- `docs/kb001-guacamole.md` est un brouillon (chronologie) à compléter après une install réussie.
+- **Le blocage install est levé** (VM 134, voie série) : recette opérationnelle dans
+  `docs/kb002-guacamole-vm134-serial-install.md` (boot `-kernel` + CD SCSI + ISO minimal
+  25.11 + `console=ttyS0`). Les voies précédentes (install installeur interrompue, image
+  qcow2 corrompue) restent documentées dans `docs/kb001-guacamole.md` et les § historiques.
+- `docs/kb001-guacamole.md` : chronologie VM 133 (voies image/interrompue) ;
+  `docs/kb002-guacamole-vm134-serial-install.md` : procédure opérationnelle retenue.
+- Une fois la VM 134 installée : `just deploy` → `nixos-rebuild switch --flake .#guacamole`
+  (flake toujours sur 26.05 → le système installé sera **26.05**, l'ISO installeur était 25.11).

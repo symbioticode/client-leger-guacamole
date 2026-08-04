@@ -12,6 +12,15 @@
   # régénéré par nixos-generate-config à l'install (sans boot.loader.*).
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader.timeout = 3;
+
+  # Console série visible (installation headless : qm terminal / socat).
+  boot.kernelParams = [ "console=ttyS0,115200n8" "console=tty1" ];
+
+  # Mot de passe root TEMPORAIRE de premier boot : sert uniquement à ouvrir
+  # une session pendant que sops-nix déploie le vrai secret (user-mapping.xml).
+  # À retirer dès que la chaîne sops est validée (voir docs/kb002-guacamole-vm134-serial-install.md).
+  users.users.root.initialPassword = "changeme-firstboot";
 
   # Agent QEMU requis par scripts/guacamole-finalize.sh (détection IP).
   services.qemuGuest.enable = true;

@@ -45,6 +45,12 @@ DEPLOY_KEY="$2"
 OUTPUT_ISO="$3"
 AGE_KEY="${4:-}"
 
+# La clé age est OBLIGATOIRE : sans elle, sops-install-secrets échoue au
+# premier boot et le système installé n'a aucun identifiant utilisable
+# (voir MISSION-AGENT-fix-pipeline-guacamole.md, point 4).
+[[ -z "$AGE_KEY" ]] && die "Clé age obligatoire (4e argument) : sops échouera sinon."
+[[ ! -f "$AGE_KEY" ]] && die "Clé age introuvable : $AGE_KEY"
+
 command -v genisoimage &>/dev/null || die "genisoimage manquant : apt install -y genisoimage"
 [[ ! -f "$DEPLOY_KEY" ]] && die "Clé de déploiement introuvable : $DEPLOY_KEY"
 
@@ -60,14 +66,9 @@ cp "$DEPLOY_KEY" "${WORKDIR}/deploy_key"
 cp "${DEPLOY_KEY}.pub" "${WORKDIR}/deploy_key.pub" 2>/dev/null || true
 chmod 600 "${WORKDIR}/deploy_key"
 
-if [[ -n "$AGE_KEY" ]]; then
-  [[ ! -f "$AGE_KEY" ]] && die "Clé age introuvable : $AGE_KEY"
-  cp "$AGE_KEY" "${WORKDIR}/age_key"
-  chmod 600 "${WORKDIR}/age_key"
-  ok "clé age embarquée (${AGE_KEY})"
-else
-  info "pas de clé age dans le seed (sops ne déchiffrera pas au premier boot)"
-fi
+cp "$AGE_KEY" "${WORKDIR}/age_key"
+chmod 600 "${WORKDIR}/age_key"
+ok "clé age embarquée (${AGE_KEY})"
 
 ssh-keyscan -t ed25519 github.com > "${WORKDIR}/known_hosts" 2>/dev/null
 ok "known_hosts github.com généré"
