@@ -66,7 +66,9 @@ in
           -subj "/CN=guacamole.local" \
           -addext "subjectAltName=IP:${cfg.address},DNS:guacamole.local"
       fi
-      chmod 600 ${tlsDir}/server.key
+      # Clé lisible par nginx (le service tourne sous user/group nginx).
+      chgrp nginx ${tlsDir}/server.key
+      chmod 640 ${tlsDir}/server.key
       chmod 644 ${tlsDir}/server.crt
     '';
 
